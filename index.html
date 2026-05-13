@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FP3級 一問一答</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    header h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    header .subtitle {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
+    #upload-btn-wrap label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    #upload-btn-wrap label:hover { background: rgba(255,255,255,0.3); }
+    #pdf-input { display: none; }
+
+    /* ===== UPLOAD SCREEN ===== */
+    #upload-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 64px);
+      padding: 24px;
+    }
+    .upload-card {
+      background: white;
+      border-radius: 16px;
+      padding: 48px 40px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      max-width: 480px;
+      width: 100%;
+    }
+    .upload-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+    }
+    .upload-card h2 {
+      font-size: 1.4rem;
+      color: #1e3a5f;
+      margin-bottom: 8px;
+    }
+    .upload-card p {
+      color: #718096;
+      margin-bottom: 32px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .upload-card label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #1e3a5f, #2d6a9f);
+      color: white;
+      padding: 14px 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .upload-card label:hover { opacity: 0.9; transform: translateY(-1px); }
+    #loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #2d6a9f;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-text { color: #4a5568; font-size: 0.9rem; }
+
+    /* ===== QUIZ SCREEN ===== */
+    #quiz-screen { display: none; }
+
+    /* Section tabs */
+    .tabs-wrapper {
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tabs {
+      display: flex;
+      gap: 0;
+      min-width: max-content;
+      padding: 0 16px;
+    }
+    .tab {
+      padding: 12px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #718096;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab:hover { color: #2d6a9f; }
+    .tab.active { color: var(--tab-color); border-bottom-color: var(--tab-color); }
+    .tab .count { font-size: 0.7rem; opacity: 0.7; margin-left: 4px; }
+
+    /* Main content */
+    .quiz-content {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    /* Progress bar */
+    .progress-bar-wrap {
+      background: #e2e8f0;
+      border-radius: 999px;
+      height: 4px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #2d6a9f, #48bb78);
+      transition: width 0.3s ease;
+    }
+
+    /* Question meta */
+    .question-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .question-num {
+      font-size: 0.9rem;
+      color: #4a5568;
+      font-weight: 600;
+    }
+    .question-num span { color: #1e3a5f; font-size: 1.1rem; }
+    .difficulty-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .subchapter-badge {
+      font-size: 0.78rem;
+      color: #718096;
+      padding: 3px 10px;
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+    }
+
+    /* Question card */
+    .question-card {
+      background: white;
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      margin-bottom: 20px;
+      border-left: 4px solid var(--section-color, #2d6a9f);
+    }
+    .question-text {
+      font-size: 1.0rem;
+      line-height: 1.8;
+      color: #2d3748;
+      margin-bottom: 16px;
+      white-space: pre-wrap;
+    }
+    .options-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px dashed #e2e8f0;
+    }
+    .option-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #f7fafc;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+    .option-num {
+      font-weight: 700;
+      color: #2d6a9f;
+      min-width: 20px;
+      flex-shrink: 0;
+    }
+
+    /* Reveal button */
+    .reveal-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #1e3a5f, #2d6a9f);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: opacity 0.2s, transform 0.1s;
+      margin-bottom: 20px;
+    }
+    .reveal-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .reveal-btn:active { transform: translateY(0); }
+
+    /* Answer card */
+    .answer-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      margin-bottom: 20px;
+      display: none;
+    }
+    .answer-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .answer-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      font-size: 1.5rem;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+    .answer-badge.correct { background: #c6f6d5; color: #276749; }
+    .answer-badge.incorrect { background: #fed7d7; color: #c53030; }
+    .answer-badge.choice { background: #bee3f8; color: #2b6cb0; }
+    .answer-label { font-size: 0.85rem; color: #718096; }
+    .answer-text { font-size: 1.2rem; font-weight: 700; color: #1a202c; }
+
+    /* Correct option highlight */
+    .option-item.correct-option {
+      background: #c6f6d5;
+      border: 1px solid #48bb78;
+    }
+    .option-item.correct-option .option-num { color: #276749; }
+
+    .explanation-text {
+      font-size: 0.92rem;
+      line-height: 1.8;
+      color: #4a5568;
+      white-space: pre-wrap;
+    }
+    .explanation-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #a0aec0;
+      margin-bottom: 8px;
+    }
+
+    /* Navigation */
+    .nav-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+    }
+    .nav-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      background: white;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #4a5568;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .nav-btn:hover:not(:disabled) {
+      border-color: #2d6a9f;
+      color: #2d6a9f;
+      background: #ebf8ff;
+    }
+    .nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .nav-btn.next-btn {
+      border-color: #2d6a9f;
+      background: #ebf8ff;
+      color: #2d6a9f;
+    }
+    .nav-btn.next-btn:hover:not(:disabled) {
+      background: #2d6a9f;
+      color: white;
+    }
+
+    /* Error */
+    #error-msg {
+      display: none;
+      background: #fff5f5;
+      border: 1px solid #fc8181;
+      color: #c53030;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      font-size: 0.9rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .question-card { padding: 20px 16px; }
+      .answer-card { padding: 20px 16px; }
+      header h1 { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📚 FP3級 一問一答</h1>
+    <div class="subtitle">FP3級学科対策</div>
+  </div>
+  <div id="upload-btn-wrap" style="display:none">
+    <label for="pdf-input-header">
+      📂 PDFを変更
+    </label>
+    <input type="file" id="pdf-input-header" accept=".pdf">
+  </div>
+</header>
+
+<!-- Upload Screen -->
+<div id="upload-screen">
+  <div class="upload-card">
+    <div class="upload-icon">📄</div>
+    <h2>PDFを読み込む</h2>
+    <p>「FP3_gakka_ichimonittou_2025_V2.pdf」などの<br>一問一答PDFファイルを選択してください。</p>
+    <label for="pdf-input">
+      📂 PDFを選択
+    </label>
+    <input type="file" id="pdf-input" accept=".pdf">
+    <div id="loading">
+      <div class="spinner"></div>
+      <div id="loading-text">PDFを読み込んでいます...</div>
+    </div>
+    <div id="error-msg"></div>
+  </div>
+</div>
+
+<!-- Quiz Screen -->
+<div id="quiz-screen">
+  <div class="tabs-wrapper">
+    <div class="tabs" id="tabs"></div>
+  </div>
+  <div class="quiz-content">
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+    </div>
+    <div class="question-meta">
+      <div class="question-num">
+        問 <span id="q-num">1</span> / <span id="q-total">-</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        <span class="subchapter-badge" id="subchapter-badge"></span>
+        <span class="difficulty-badge" id="difficulty-badge">★</span>
+      </div>
+    </div>
+    <div class="question-card" id="question-card">
+      <div class="question-text" id="question-text"></div>
+      <div class="options-list" id="options-list" style="display:none"></div>
+    </div>
+    <button class="reveal-btn" id="reveal-btn" onclick="revealAnswer()">
+      👁 答えを見る
+    </button>
+    <div class="answer-card" id="answer-card">
+      <div class="answer-header">
+        <div class="answer-badge" id="answer-badge"></div>
+        <div>
+          <div class="answer-label">正解</div>
+          <div class="answer-text" id="answer-text"></div>
+        </div>
+      </div>
+      <div class="explanation-label">解説</div>
+      <div class="explanation-text" id="explanation-text"></div>
+    </div>
+    <div class="nav-buttons">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)" disabled>
+        ← 前の問題
+      </button>
+      <button class="nav-btn next-btn" id="next-btn" onclick="navigate(1)">
+        次の問題 →
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+// ==================== CONFIGURATION ====================
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const SECTIONS = [
+  { name: 'ライフプランニング', short: '①ライフ', color: '#3182ce' },
+  { name: 'リスク管理',         short: '②リスク', color: '#38a169' },
+  { name: '金融資産運用',       short: '③金融',   color: '#d69e2e' },
+  { name: 'タックスプランニング', short: '④タックス', color: '#e53e3e' },
+  { name: '不動産',             short: '⑤不動産', color: '#805ad5' },
+  { name: '相続・事業承継',     short: '⑥相続',   color: '#dd6b20' },
+];
+
+// ==================== STATE ====================
+
+let allQuestions = [];
+let currentQuestions = [];
+let currentIndex = 0;
+let currentSectionIdx = -1; // -1 = all
+
+// ==================== PDF PARSING ====================
+
+async function loadPDF(file) {
+  showLoading(true);
+  setError('');
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    setLoadingText(`解析中... (0/${pdf.numPages}ページ)`);
+
+    // Extract lines per page using hasEOL
+    const pageLines = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const lines = extractLines(content);
+      pageLines.push(lines);
+      if (p % 5 === 0) setLoadingText(`解析中... (${p}/${pdf.numPages}ページ)`);
+    }
+
+    const questions = parseAllQuestions(pageLines);
+
+    if (questions.length === 0) {
+      throw new Error('問題が見つかりませんでした。PDFファイルの形式を確認してください。');
+    }
+
+    allQuestions = questions;
+    showLoading(false);
+    startQuiz();
+
+  } catch (err) {
+    showLoading(false);
+    setError('エラー: ' + err.message);
+    console.error(err);
+  }
+}
+
+function extractLines(content) {
+  // Group text items into lines using hasEOL and y-position
+  const rawLines = [];
+  let currentLine = { y: null, text: '' };
+
+  content.items.forEach(item => {
+    const y = Math.round(item.transform[5]); // y position
+    const text = item.str;
+
+    if (currentLine.y === null) {
+      currentLine.y = y;
+      currentLine.text = text;
+    } else if (Math.abs(y - currentLine.y) > 2) {
+      // New line (y changed significantly)
+      if (currentLine.text.trim()) rawLines.push(currentLine.text);
+      currentLine = { y, text };
+    } else {
+      // Same line - concatenate with space if needed
+      if (currentLine.text && text && !currentLine.text.endsWith(' ') && !text.startsWith(' ')) {
+        currentLine.text += ' ' + text;
+      } else {
+        currentLine.text += text;
+      }
+    }
+
+    if (item.hasEOL) {
+      if (currentLine.text.trim()) rawLines.push(currentLine.text);
+      currentLine = { y: null, text: '' };
+    }
+  });
+
+  if (currentLine.text.trim()) rawLines.push(currentLine.text);
+
+  // Clean up lines
+  return rawLines
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(l => l.length > 0);
+}
+
+function parseAllQuestions(pageLines) {
+  const questions = [];
+
+  // Detect section boundaries: pages with no ★ after page 1
+  // Assign section index as we go
+  let sectionIdx = 0;
+  let allLines = [];
+
+  // Build a flat list of lines tagged with section
+  for (let p = 0; p < pageLines.length; p++) {
+    const lines = pageLines[p];
+    const pageText = lines.join(' ');
+
+    // Page 0 (index) = page 1 = title page, skip
+    if (p === 0) continue;
+
+    // Check if this is a section separator page (no ★)
+    if (!pageText.includes('★') && p > 0) {
+      // Section boundary
+      if (sectionIdx < SECTIONS.length - 1) sectionIdx++;
+      continue;
+    }
+
+    // Add lines to current section
+    for (const line of lines) {
+      allLines.push({ line, sectionIdx });
+    }
+  }
+
+  // Now parse questions from the flat line list
+  // Question regex: starts with number, then stars, then answer
+  const Q_START = /^(\d+)\s+★(★*)\s+(○|×|[1-3])\s*(.*)/;
+  const SUBCHAPTER = /^[１２３４５６]\s+(.+)/;
+  const OPTION = /^([1-3])[）)]\s+(.*)/;
+  const PAGE_HEADER = /^FP3\s*級学科対策\s*一問一答集\s*\d*/;
+
+  let currentQ = null;
+  let state = 'none'; // none | question | options | explanation
+  let currentSubChapter = '';
+
+  function finalizeQuestion(q) {
+    if (!q) return;
+    q.question = q.questionLines.join('').trim();
+    q.explanation = q.explanationLines.join('').trim();
+    if (q.options.length === 3) {
+      q.type = 'multiple';
+    } else {
+      q.type = 'truefalse';
+      q.options = null;
+    }
+  }
+
+  for (let i = 0; i < allLines.length; i++) {
+    const { line, sectionIdx } = allLines[i];
+
+    // Skip page headers
+    if (PAGE_HEADER.test(line)) continue;
+
+    // Check for question start
+    const qMatch = line.match(Q_START);
+    if (qMatch) {
+      // Finalize previous question
+      if (currentQ) {
+        finalizeQuestion(currentQ);
+        questions.push(currentQ);
+      }
+      const num = parseInt(qMatch[1]);
+      const difficulty = '★' + qMatch[2];
+      const answer = qMatch[3];
+      const restText = qMatch[4].trim();
+
+      currentQ = {
+        section: SECTIONS[sectionIdx].name,
+        sectionIdx,
+        subChapter: currentSubChapter,
+        num,
+        difficulty,
+        answer,
+        questionLines: restText ? [restText] : [],
+        options: [],
+        optionTexts: [],
+        explanationLines: [],
+        type: 'truefalse',
+        question: '',
+        explanation: '',
+      };
+      state = 'question';
+      continue;
+    }
+
+    if (!currentQ) {
+      // Check for sub-chapter heading
+      const scMatch = line.match(SUBCHAPTER);
+      if (scMatch) {
+        const candidate = scMatch[1].replace(/\d+$/, '').trim();
+        if (candidate.length > 1) currentSubChapter = candidate;
+      }
+      continue;
+    }
+
+    // Check for option line
+    const optMatch = line.match(OPTION);
+    if (optMatch && (state === 'question' || state === 'options')) {
+      state = 'options';
+      currentQ.options.push(optMatch[2].trim());
+      continue;
+    }
+
+    // Skip page headers embedded in content
+    if (PAGE_HEADER.test(line)) continue;
+
+    // Sub-chapter heading within a section
+    const scMatch = line.match(SUBCHAPTER);
+    if (scMatch && line.length < 30 && !/★/.test(line)) {
+      const candidate = scMatch[1].replace(/\d+$/, '').trim();
+      if (candidate.length > 1) currentSubChapter = candidate;
+      continue;
+    }
+
+    // State: in options → next non-option line is explanation
+    if (state === 'options') {
+      state = 'explanation';
+      currentQ.explanationLines.push(line);
+      continue;
+    }
+
+    // State: question
+    if (state === 'question') {
+      // For true/false: if current question text ends with 。, next is explanation
+      const joinedQ = currentQ.questionLines.join('');
+      if (joinedQ.endsWith('。') || joinedQ.endsWith('？') || joinedQ.endsWith('）')) {
+        state = 'explanation';
+        currentQ.explanationLines.push(line);
+      } else {
+        currentQ.questionLines.push(line);
+      }
+      continue;
+    }
+
+    // State: explanation
+    if (state === 'explanation') {
+      currentQ.explanationLines.push(line);
+    }
+  }
+
+  // Finalize last question
+  if (currentQ) {
+    finalizeQuestion(currentQ);
+    questions.push(currentQ);
+  }
+
+  // Post-process: if question is empty, try to reconstruct
+  return questions.filter(q => q.question.length > 0);
+}
+
+// ==================== QUIZ LOGIC ====================
+
+function startQuiz() {
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('quiz-screen').style.display = 'block';
+  document.getElementById('upload-btn-wrap').style.display = 'block';
+
+  buildTabs();
+  selectSection(-1); // all questions
+}
+
+function buildTabs() {
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = '';
+
+  const allCount = allQuestions.length;
+
+  // "全問題" tab
+  const allTab = makeTab('全問題', allCount, -1, '#555');
+  tabsEl.appendChild(allTab);
+
+  // Section tabs
+  SECTIONS.forEach((sec, idx) => {
+    const count = allQuestions.filter(q => q.sectionIdx === idx).length;
+    if (count === 0) return;
+    const tab = makeTab(sec.short, count, idx, sec.color);
+    tabsEl.appendChild(tab);
+  });
+}
+
+function makeTab(label, count, idx, color) {
+  const btn = document.createElement('button');
+  btn.className = 'tab';
+  btn.style.setProperty('--tab-color', color);
+  btn.dataset.idx = idx;
+  btn.innerHTML = `${label}<span class="count">${count}</span>`;
+  btn.onclick = () => selectSection(idx);
+  return btn;
+}
+
+function selectSection(idx) {
+  currentSectionIdx = idx;
+  currentIndex = 0;
+
+  if (idx === -1) {
+    currentQuestions = [...allQuestions];
+  } else {
+    currentQuestions = allQuestions.filter(q => q.sectionIdx === idx);
+  }
+
+  // Update active tab
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', parseInt(t.dataset.idx) === idx);
+  });
+
+  showQuestion();
+}
+
+function showQuestion() {
+  if (currentQuestions.length === 0) return;
+
+  const q = currentQuestions[currentIndex];
+  const sec = SECTIONS[q.sectionIdx];
+
+  // Progress
+  const pct = ((currentIndex + 1) / currentQuestions.length) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('q-num').textContent = currentIndex + 1;
+  document.getElementById('q-total').textContent = currentQuestions.length;
+
+  // Section color on card
+  document.getElementById('question-card').style.setProperty('--section-color', sec.color);
+
+  // Sub-chapter badge
+  const scBadge = document.getElementById('subchapter-badge');
+  if (q.subChapter) {
+    scBadge.textContent = q.subChapter;
+    scBadge.style.display = 'inline-block';
+  } else {
+    scBadge.style.display = 'none';
+  }
+
+  // Difficulty badge
+  document.getElementById('difficulty-badge').textContent = q.difficulty;
+
+  // Question text
+  document.getElementById('question-text').textContent = q.question;
+
+  // Options
+  const optEl = document.getElementById('options-list');
+  if (q.type === 'multiple' && q.options && q.options.length > 0) {
+    optEl.style.display = 'flex';
+    optEl.innerHTML = q.options.map((opt, i) => `
+      <div class="option-item" data-opt="${i+1}">
+        <span class="option-num">${i+1})</span>
+        <span>${opt}</span>
+      </div>
+    `).join('');
+  } else {
+    optEl.style.display = 'none';
+    optEl.innerHTML = '';
+  }
+
+  // Reset answer area
+  document.getElementById('answer-card').style.display = 'none';
+  document.getElementById('reveal-btn').style.display = 'flex';
+
+  // Nav buttons
+  document.getElementById('prev-btn').disabled = currentIndex === 0;
+  document.getElementById('next-btn').disabled = currentIndex === currentQuestions.length - 1;
+
+  // Scroll top
+  document.querySelector('.quiz-content').scrollTop = 0;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function revealAnswer() {
+  const q = currentQuestions[currentIndex];
+
+  // Determine answer display
+  const badge = document.getElementById('answer-badge');
+  const answerText = document.getElementById('answer-text');
+
+  if (q.answer === '○') {
+    badge.className = 'answer-badge correct';
+    badge.textContent = '○';
+    answerText.textContent = '正しい（○）';
+  } else if (q.answer === '×') {
+    badge.className = 'answer-badge incorrect';
+    badge.textContent = '✕';
+    answerText.textContent = '誤り（×）';
+  } else {
+    badge.className = 'answer-badge choice';
+    badge.textContent = q.answer;
+    answerText.textContent = `選択肢 ${q.answer}`;
+  }
+
+  // Highlight correct option for multiple choice
+  if (q.type === 'multiple' && q.answer) {
+    document.querySelectorAll('.option-item').forEach(el => {
+      el.classList.toggle('correct-option', el.dataset.opt === q.answer);
+    });
+  }
+
+  // Explanation
+  document.getElementById('explanation-text').textContent =
+    q.explanation || '（解説なし）';
+
+  // Show answer card
+  document.getElementById('answer-card').style.display = 'block';
+  document.getElementById('reveal-btn').style.display = 'none';
+
+  // Smooth scroll to answer
+  setTimeout(() => {
+    document.getElementById('answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+}
+
+function navigate(dir) {
+  const newIdx = currentIndex + dir;
+  if (newIdx < 0 || newIdx >= currentQuestions.length) return;
+  currentIndex = newIdx;
+  showQuestion();
+}
+
+// ==================== UI HELPERS ====================
+
+function showLoading(show) {
+  document.getElementById('loading').style.display = show ? 'flex' : 'none';
+}
+
+function setLoadingText(text) {
+  document.getElementById('loading-text').textContent = text;
+}
+
+function setError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+// ==================== EVENT LISTENERS ====================
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.name.endsWith('.pdf')) {
+    setError('PDFファイルを選択してください。');
+    return;
+  }
+  loadPDF(file);
+}
+
+document.getElementById('pdf-input').addEventListener('change', handleFileSelect);
+document.getElementById('pdf-input-header').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('quiz-screen').style.display = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+  document.getElementById('upload-btn-wrap').style.display = 'none';
+  loadPDF(file);
+});
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (document.getElementById('quiz-screen').style.display === 'none') return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+  if (e.key === ' ' || e.key === 'Enter') {
+    if (document.getElementById('reveal-btn').style.display !== 'none') {
+      revealAnswer();
+    }
+    e.preventDefault();
+  }
+});
+</script>
+</body>
+</html>
