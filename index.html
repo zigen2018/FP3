@@ -298,12 +298,31 @@
     .answer-label { font-size: 0.85rem; color: #718096; }
     .answer-text { font-size: 1.2rem; font-weight: 700; color: #1a202c; }
 
-    /* Correct option highlight */
+    /* 選択肢のインタラクション */
+    .option-item { cursor: default; transition: background 0.15s, border-color 0.15s; }
+    .option-item.selectable { cursor: pointer; }
+    .option-item.selectable:hover { background: #ebf8ff; border: 1px solid #90cdf4; }
+
+    /* 選択中（回答前）: 青 */
+    .option-item.selected {
+      background: #ebf8ff;
+      border: 1px solid #63b3ed;
+    }
+    .option-item.selected .option-num { color: #2b6cb0; font-weight: 900; }
+
+    /* 正解 */
     .option-item.correct-option {
       background: #c6f6d5;
       border: 1px solid #48bb78;
     }
     .option-item.correct-option .option-num { color: #276749; }
+
+    /* 不正解（誤って選んだ選択肢）: 赤 */
+    .option-item.wrong-option {
+      background: #fed7d7;
+      border: 1px solid #fc8181;
+    }
+    .option-item.wrong-option .option-num { color: #c53030; }
 
     .explanation-text {
       font-size: 0.92rem;
@@ -480,6 +499,7 @@ let allQuestions = [];
 let currentQuestions = [];
 let currentIndex = 0;
 let currentSectionIdx = -1; // -1 = all
+let selectedOption = null;  // 選択中の選択肢番号（"1"/"2"/"3"、未選択はnull）
 
 // ==================== PDF PARSING ====================
 
@@ -559,6 +579,33 @@ function extractLines(content) {
     .filter(l => l.length > 0);
 }
 
+// PDFから抽出した行を自然な形で結合する
+// ・文の途中での折り返し → そのまま連結（改行なし）
+// ・文末（。！？）の後・＜資料＞ブロック先頭・資料の各行（：含む短い行）→ 改行を挿入
+function smartJoinLines(lines) {
+  if (lines.length === 0) return '';
+  if (lines.length === 1) return lines[0];
+
+  let current = lines[0];
+
+  for (let i = 1; i < lines.length; i++) {
+    const curr = lines[i];
+
+    const shouldBreak =
+      /[。！？]$/.test(current) ||           // 直前が文末
+      /^[＜〈【「『]/.test(curr) ||          // 新しいブロック（＜資料＞など）
+      (/[：]/.test(curr) && curr.length < 55); // 資料の key-value 行（短くて：を含む）
+
+    if (shouldBreak) {
+      current += '\n' + curr;
+    } else {
+      current += curr; // 折り返しはそのまま連結
+    }
+  }
+
+  return current;
+}
+
 function parseAllQuestions(pageLines) {
   const questions = [];
 
@@ -601,9 +648,10 @@ function parseAllQuestions(pageLines) {
 
   function finalizeQuestion(q) {
     if (!q) return;
-    q.question = q.questionLines.join('').trim();
-    q.explanation = q.explanationLines.join('').trim();
-    if (q.options.length === 3) {
+    // smartJoinLines で自然な改行のみ残す
+    q.question    = smartJoinLines(q.questionLines).trim();
+    q.explanation = smartJoinLines(q.explanationLines).trim();
+    if (q.questionType === 'multiple' && q.options.length > 0) {
       q.type = 'multiple';
     } else {
       q.type = 'truefalse';
@@ -629,6 +677,8 @@ function parseAllQuestions(pageLines) {
       const difficulty = '★' + qMatch[2];
       const answer = qMatch[3];
       const restText = qMatch[4].trim();
+      // 答えが○/×なら真偽問題、1/2/3なら選択問題
+      const questionType = (answer === '○' || answer === '×') ? 'truefalse' : 'multiple';
 
       currentQ = {
         section: SECTIONS[sectionIdx].name,
@@ -637,9 +687,9 @@ function parseAllQuestions(pageLines) {
         num,
         difficulty,
         answer,
+        questionType,
         questionLines: restText ? [restText] : [],
         options: [],
-        optionTexts: [],
         explanationLines: [],
         type: 'truefalse',
         question: '',
@@ -659,9 +709,9 @@ function parseAllQuestions(pageLines) {
       continue;
     }
 
-    // Check for option line
+    // 選択肢行の検出（選択問題のみ。真偽問題で誤検知しないよう questionType で絞る）
     const optMatch = line.match(OPTION);
-    if (optMatch && (state === 'question' || state === 'options')) {
+    if (optMatch && currentQ.questionType === 'multiple' && (state === 'question' || state === 'options')) {
       state = 'options';
       currentQ.options.push(optMatch[2].trim());
       continue;
@@ -687,12 +737,18 @@ function parseAllQuestions(pageLines) {
 
     // State: question
     if (state === 'question') {
-      // For true/false: if current question text ends with 。, next is explanation
-      const joinedQ = currentQ.questionLines.join('');
-      if (joinedQ.endsWith('。') || joinedQ.endsWith('？') || joinedQ.endsWith('）')) {
-        state = 'explanation';
-        currentQ.explanationLines.push(line);
+      if (currentQ.questionType === 'truefalse') {
+        // 真偽問題：問題文が文末（。？）で終わったら次の行から解説
+        const joinedQ = currentQ.questionLines.join('');
+        if (joinedQ.endsWith('。') || joinedQ.endsWith('？')) {
+          state = 'explanation';
+          currentQ.explanationLines.push(line);
+        } else {
+          currentQ.questionLines.push(line);
+        }
       } else {
+        // 選択問題：1) が出るまで問題文として収集（＜資料＞も含む）
+        // ※ 選択肢行は上の optMatch チェックで既に処理済みなので、ここに来る行はすべて問題文
         currentQ.questionLines.push(line);
       }
       continue;
@@ -802,16 +858,34 @@ function showQuestion() {
   // Question text
   document.getElementById('question-text').textContent = q.question;
 
+  // 選択状態リセット
+  selectedOption = null;
+
   // Options
   const optEl = document.getElementById('options-list');
   if (q.type === 'multiple' && q.options && q.options.length > 0) {
     optEl.style.display = 'flex';
     optEl.innerHTML = q.options.map((opt, i) => `
-      <div class="option-item" data-opt="${i+1}">
+      <div class="option-item selectable" data-opt="${i+1}">
         <span class="option-num">${i+1})</span>
         <span>${opt}</span>
       </div>
     `).join('');
+    // クリックで選択（トグル）
+    optEl.querySelectorAll('.option-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const num = el.dataset.opt;
+        // 同じものをクリックしたら選択解除
+        if (selectedOption === num) {
+          selectedOption = null;
+          el.classList.remove('selected');
+        } else {
+          selectedOption = num;
+          optEl.querySelectorAll('.option-item').forEach(e => e.classList.remove('selected'));
+          el.classList.add('selected');
+        }
+      });
+    });
   } else {
     optEl.style.display = 'none';
     optEl.innerHTML = '';
@@ -833,40 +907,64 @@ function showQuestion() {
 function revealAnswer() {
   const q = currentQuestions[currentIndex];
 
-  // Determine answer display
-  const badge = document.getElementById('answer-badge');
-  const answerText = document.getElementById('answer-text');
+  // --- 選択肢のハイライト処理（選択問題のみ）---
+  if (q.type === 'multiple') {
+    const isCorrect = selectedOption === q.answer;
 
-  if (q.answer === '○') {
-    badge.className = 'answer-badge correct';
-    badge.textContent = '○';
-    answerText.textContent = '正しい（○）';
-  } else if (q.answer === '×') {
-    badge.className = 'answer-badge incorrect';
-    badge.textContent = '✕';
-    answerText.textContent = '誤り（×）';
-  } else {
-    badge.className = 'answer-badge choice';
-    badge.textContent = q.answer;
-    answerText.textContent = `選択肢 ${q.answer}`;
-  }
-
-  // Highlight correct option for multiple choice
-  if (q.type === 'multiple' && q.answer) {
     document.querySelectorAll('.option-item').forEach(el => {
-      el.classList.toggle('correct-option', el.dataset.opt === q.answer);
+      const num = el.dataset.opt;
+      // クリック不可にする
+      el.classList.remove('selectable', 'selected');
+      el.style.cursor = 'default';
+
+      if (num === q.answer) {
+        el.classList.add('correct-option');   // 正解 → 緑
+      } else if (num === selectedOption) {
+        el.classList.add('wrong-option');     // 選んだ誤答 → 赤
+      }
     });
+
+    // バッジ表示
+    const badge = document.getElementById('answer-badge');
+    const answerText = document.getElementById('answer-text');
+    badge.textContent = q.answer;
+
+    if (selectedOption === null) {
+      // 未選択のまま押した → ニュートラル表示
+      badge.className = 'answer-badge choice';
+      answerText.textContent = `正解：選択肢 ${q.answer}`;
+    } else if (isCorrect) {
+      badge.className = 'answer-badge correct';
+      answerText.textContent = `正解！ 選択肢 ${q.answer}`;
+    } else {
+      badge.className = 'answer-badge incorrect';
+      answerText.textContent = `不正解 ／ 正解：選択肢 ${q.answer}`;
+    }
+
+  } else {
+    // 真偽問題
+    const badge = document.getElementById('answer-badge');
+    const answerText = document.getElementById('answer-text');
+    if (q.answer === '○') {
+      badge.className = 'answer-badge correct';
+      badge.textContent = '○';
+      answerText.textContent = '正しい（○）';
+    } else {
+      badge.className = 'answer-badge incorrect';
+      badge.textContent = '✕';
+      answerText.textContent = '誤り（×）';
+    }
   }
 
-  // Explanation
+  // 解説
   document.getElementById('explanation-text').textContent =
     q.explanation || '（解説なし）';
 
-  // Show answer card
+  // 答えカードを表示、ボタンを隠す
   document.getElementById('answer-card').style.display = 'block';
   document.getElementById('reveal-btn').style.display = 'none';
 
-  // Smooth scroll to answer
+  // スムーズスクロール
   setTimeout(() => {
     document.getElementById('answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, 100);
