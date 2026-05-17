@@ -181,6 +181,28 @@
       font-weight: 600;
     }
     .question-num span { color: #1e3a5f; font-size: 1.1rem; }
+    #q-num {
+      display: inline-block;
+      min-width: 1.5em;
+      text-align: center;
+      border-bottom: 2px dashed #90cdf4;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: background 0.15s;
+    }
+    #q-num:hover { background: #ebf8ff; }
+    #q-num-input {
+      width: 3.5em;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1e3a5f;
+      text-align: center;
+      border: 2px solid #63b3ed;
+      border-radius: 6px;
+      padding: 0 4px;
+      outline: none;
+      background: #ebf8ff;
+    }
     .difficulty-badge {
       display: inline-flex;
       align-items: center;
@@ -441,7 +463,7 @@
     </div>
     <div class="question-meta">
       <div class="question-num">
-        問 <span id="q-num">1</span> / <span id="q-total">-</span>
+        問 <span id="q-num" title="クリックして問題番号を入力">1</span> / <span id="q-total">-</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <span class="subchapter-badge" id="subchapter-badge"></span>
@@ -837,8 +859,12 @@ function showQuestion() {
   // Progress
   const pct = ((currentIndex + 1) / currentQuestions.length) * 100;
   document.getElementById('progress-bar').style.width = pct + '%';
-  document.getElementById('q-num').textContent = currentIndex + 1;
+  const qNumEl = document.getElementById('q-num');
+  qNumEl.textContent = currentIndex + 1;
   document.getElementById('q-total').textContent = currentQuestions.length;
+
+  // クリックで番号入力にする（毎回付け直す）
+  qNumEl.onclick = () => startJumpInput(qNumEl);
 
   // Section color on card
   document.getElementById('question-card').style.setProperty('--section-color', sec.color);
@@ -975,6 +1001,62 @@ function navigate(dir) {
   if (newIdx < 0 || newIdx >= currentQuestions.length) return;
   currentIndex = newIdx;
   showQuestion();
+}
+
+// 問題番号をクリックしたときの入力モード
+function startJumpInput(qNumEl) {
+  const total = currentQuestions.length;
+
+  // すでに入力欄があれば何もしない
+  if (document.getElementById('q-num-input')) return;
+
+  // span を非表示にして input を挿入
+  qNumEl.style.display = 'none';
+  const input = document.createElement('input');
+  input.id = 'q-num-input';
+  input.type = 'number';
+  input.min = 1;
+  input.max = total;
+  input.value = currentIndex + 1;
+  qNumEl.parentNode.insertBefore(input, qNumEl.nextSibling);
+  input.focus();
+  input.select();
+
+  // blur や Enter の二重発火を防ぐフラグ
+  let committed = false;
+
+  function commitJump() {
+    if (committed) return;
+    committed = true;
+    const val = parseInt(input.value, 10);
+    input.remove();
+    qNumEl.style.display = '';
+    if (!isNaN(val) && val >= 1 && val <= total) {
+      currentIndex = val - 1;
+      showQuestion();
+    }
+  }
+
+  function cancelJump() {
+    if (committed) return;
+    committed = true;
+    input.remove();
+    qNumEl.style.display = '';
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation(); // document の keydown（解説表示）に伝わらないようにする
+      commitJump();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelJump();
+    }
+  });
+  input.addEventListener('blur', commitJump);
 }
 
 // ==================== UI HELPERS ====================
